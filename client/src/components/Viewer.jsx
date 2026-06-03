@@ -17,7 +17,10 @@ const Viewer = () => {
       });
       peerConnection.current = pc;
 
+      let broadcasterId = null;
+
       pc.ontrack = (event) => {
+        console.log("Remote track received:", event.streams[0]);
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = event.streams[0];
           setIsLive(true);
@@ -25,12 +28,18 @@ const Viewer = () => {
       };
 
       pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit("ice-candidate", { roomId, candidate: event.candidate });
+        if (event.candidate && broadcasterId) {
+          console.log("Sending ICE candidate to broadcaster:", broadcasterId);
+          socket.emit("ice-candidate", {
+            to: broadcasterId,
+            candidate: event.candidate,
+          });
         }
       };
 
       socket.on("webrtc-offer", async ({ from, offer }) => {
+        console.log("Received WebRTC offer from:", from);
+        broadcasterId = from;
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(offer));
           const answer = await pc.createAnswer();
