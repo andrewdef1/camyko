@@ -6,11 +6,7 @@ const SOCKET_URL =
     ? "http://localhost:3001"
     : "https://camyko-production.up.railway.app";
 
-export const socket = io(SOCKET_URL, {
-  transports: ["websocket"],
-  reconnection: true,
-  reconnectionAttempts: 5,
-});
+export const socket = io(SOCKET_URL);
 
 socket.on("connect_error", (err) => {
   console.error("Socket Connection Error:", err.message);

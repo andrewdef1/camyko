@@ -16,7 +16,6 @@ const io = new Server(server, {
     origin: "*",
     methods: ["GET", "POST"],
   },
-  transports: ["websocket"],
 });
 
 // Initial room state for 10 rooms
