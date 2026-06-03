@@ -30,18 +30,18 @@ const Viewer = () => {
         }
       };
 
-      socket.on("webrtc-offer", async ({ offer }) => {
+      socket.on("webrtc-offer", async ({ from, offer }) => {
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(offer));
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          socket.emit("webrtc-answer", { roomId, answer });
+          socket.emit("webrtc-answer", { to: from, answer });
         } catch (err) {
           console.error("Error handling offer:", err);
         }
       });
 
-      socket.on("ice-candidate", async ({ candidate }) => {
+      socket.on("ice-candidate", async ({ from, candidate }) => {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
         } catch (err) {

@@ -7,7 +7,7 @@ const Broadcaster = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const localVideoRef = useRef(null);
-  const peerConnection = useRef(null);
+  const peerConnections = useRef({});
   const streamRef = useRef(null);
   const [streamActive, setStreamActive] = useState(false);
   const [error, setError] = useState(null);
@@ -21,8 +21,8 @@ const Broadcaster = () => {
     // 1. Stop all tracks in the stream
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => {
-        track.enabled = false; // Disable first
-        track.stop(); // Then stop
+        track.enabled = false;
+        track.stop();
         console.log(`Stopped track: ${track.kind}`);
       });
       streamRef.current = null;
@@ -31,14 +31,12 @@ const Broadcaster = () => {
     // 2. Clear the video element
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = null;
-      localVideoRef.current.load(); // Force reset
+      localVideoRef.current.load();
     }
 
-    // 3. Close PeerConnection
-    if (peerConnection.current) {
-      peerConnection.current.close();
-      peerConnection.current = null;
-    }
+    // 3. Close all PeerConnections
+    Object.values(peerConnections.current).forEach((pc) => pc.close());
+    peerConnections.current = {};
 
     setStreamActive(false);
   };
@@ -46,6 +44,39 @@ const Broadcaster = () => {
   const handleLeave = () => {
     stopEverything();
     navigate("/");
+  };
+
+  const createPeerConnection = (viewerId, stream) => {
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+
+    peerConnections.current[viewerId] = pc;
+
+    stream.getTracks().forEach((track) => {
+      pc.addTrack(track, stream);
+    });
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit("ice-candidate", {
+          to: viewerId,
+          candidate: event.candidate,
+        });
+      }
+    };
+
+    pc.onnegotiationneeded = async () => {
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit("webrtc-offer", { to: viewerId, offer });
+      } catch (err) {
+        console.error("Negotiation error:", err);
+      }
+    };
+
+    return pc;
   };
 
   useEffect(() => {
@@ -60,9 +91,6 @@ const Broadcaster = () => {
         });
 
         if (!isMounted) {
-          console.log(
-            "Component unmounted during initialization, stopping tracks",
-          );
           mediaStream.getTracks().forEach((t) => t.stop());
           return;
         }
@@ -76,36 +104,14 @@ const Broadcaster = () => {
 
         socket.emit("join-room", { roomId, role: "broadcaster" });
 
-        const pc = new RTCPeerConnection({
-          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-        });
-        peerConnection.current = pc;
-
-        mediaStream.getTracks().forEach((track) => {
-          pc.addTrack(track, mediaStream);
+        socket.on("viewer-joined", ({ viewerId }) => {
+          console.log(`Viewer ${viewerId} joined. Initiating connection...`);
+          createPeerConnection(viewerId, mediaStream);
         });
 
-        pc.onicecandidate = (event) => {
-          if (event.candidate) {
-            socket.emit("ice-candidate", {
-              roomId,
-              candidate: event.candidate,
-            });
-          }
-        };
-
-        pc.onnegotiationneeded = async () => {
-          try {
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            socket.emit("webrtc-offer", { roomId, offer });
-          } catch (err) {
-            console.error("Negotiation error:", err);
-          }
-        };
-
-        socket.on("webrtc-answer", async ({ answer }) => {
-          if (pc.signalingState !== "closed") {
+        socket.on("webrtc-answer", async ({ from, answer }) => {
+          const pc = peerConnections.current[from];
+          if (pc && pc.signalingState !== "closed") {
             try {
               await pc.setRemoteDescription(new RTCSessionDescription(answer));
             } catch (err) {
@@ -114,8 +120,9 @@ const Broadcaster = () => {
           }
         });
 
-        socket.on("ice-candidate", async ({ candidate }) => {
-          if (pc.signalingState !== "closed") {
+        socket.on("ice-candidate", async ({ from, candidate }) => {
+          const pc = peerConnections.current[from];
+          if (pc && pc.signalingState !== "closed") {
             try {
               await pc.addIceCandidate(new RTCIceCandidate(candidate));
             } catch (err) {
@@ -139,6 +146,7 @@ const Broadcaster = () => {
       console.log("Effect cleanup triggered");
       isMounted = false;
       stopEverything();
+      socket.off("viewer-joined");
       socket.off("webrtc-answer");
       socket.off("ice-candidate");
     };
