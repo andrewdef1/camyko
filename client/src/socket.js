@@ -1,9 +1,10 @@
 import io from "socket.io-client";
 
+// client/src/socket.js
 const SOCKET_URL =
   window.location.hostname === "localhost"
     ? "http://localhost:3001"
-    : "https://your-backend-url.com";
+    : "camyko-production.up.railway.app"; // <--- PASTE HERE
 
 export const socket = io(SOCKET_URL);
 
