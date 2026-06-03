@@ -10,7 +10,19 @@ const Broadcaster = () => {
   const peerConnections = useRef({});
   const streamRef = useRef(null);
   const [streamActive, setStreamActive] = useState(false);
+  const [facingMode, setFacingMode] = useState("user");
   const [error, setError] = useState(null);
+
+  const toggleCamera = () => {
+    setFacingMode((prev) => (prev === "user" ? "environment" : "user"));
+  };
+
+  const stopMediaOnly = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  };
 
   const stopEverything = () => {
     console.log("Cleanup: Stopping all media and connections");
@@ -19,14 +31,7 @@ const Broadcaster = () => {
     socket.emit("leave-room", { roomId });
 
     // 1. Stop all tracks in the stream
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => {
-        track.enabled = false;
-        track.stop();
-        console.log(`Stopped track: ${track.kind}`);
-      });
-      streamRef.current = null;
-    }
+    stopMediaOnly();
 
     // 2. Clear the video element
     if (localVideoRef.current) {
@@ -92,9 +97,11 @@ const Broadcaster = () => {
 
     const startBroadcasting = async () => {
       try {
-        console.log("Initializing camera access...");
+        console.log(`Initializing camera access (${facingMode})...`);
+        stopMediaOnly();
+
         const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" },
+          video: { facingMode: facingMode },
           audio: true,
         });
 
@@ -109,6 +116,19 @@ const Broadcaster = () => {
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = mediaStream;
         }
+
+        // Update tracks for all existing viewers
+        Object.values(peerConnections.current).forEach((pc) => {
+          const senders = pc.getSenders();
+          mediaStream.getTracks().forEach((track) => {
+            const sender = senders.find(
+              (s) => s.track && s.track.kind === track.kind,
+            );
+            if (sender) {
+              sender.replaceTrack(track);
+            }
+          });
+        });
 
         socket.emit("join-room", { roomId, role: "broadcaster" });
 
@@ -158,7 +178,7 @@ const Broadcaster = () => {
       socket.off("webrtc-answer");
       socket.off("ice-candidate");
     };
-  }, [roomId]);
+  }, [roomId, facingMode]);
 
   return (
     <div className="flex flex-col h-screen bg-slate-900 overflow-hidden">
@@ -171,6 +191,13 @@ const Broadcaster = () => {
           Back to Dashboard
         </button>
         <div className="flex items-center gap-3">
+          <button
+            onClick={toggleCamera}
+            className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-colors border border-slate-700"
+          >
+            <Video size={14} />
+            Switch Cam
+          </button>
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <span className="font-semibold">Broadcasting: Room {roomId}</span>
         </div>
@@ -190,7 +217,7 @@ const Broadcaster = () => {
                 autoPlay
                 playsInline
                 muted
-                className="w-full h-full object-cover mirror"
+                className={`w-full h-full object-cover ${facingMode === "user" ? "mirror" : ""}`}
               />
             </div>
             {streamActive && (
