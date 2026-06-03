@@ -1,8 +1,8 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Camera, Radio, Copy, Check } from 'lucide-react';
+import React from "react";
+import { useNavigate } from "react-router-dom";
+import { Camera, Radio, Copy, Check } from "lucide-react";
 
-const Dashboard = ({ rooms }) => {
+const Dashboard = ({ rooms, isConnected }) => {
   const navigate = useNavigate();
   const [copiedId, setCopiedId] = React.useState(null);
 
@@ -19,7 +19,25 @@ const Dashboard = ({ rooms }) => {
         <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
           Camyko Control Center
         </h1>
-        <p className="text-slate-400">Manage your mobile camera streams for OBS Studio</p>
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-slate-400">
+            Manage your mobile camera streams for OBS Studio
+          </p>
+          <span
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+              isConnected
+                ? "bg-emerald-500/10 text-emerald-400"
+                : "bg-red-500/10 text-red-400"
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${isConnected ? "bg-emerald-500" : "bg-red-500 animate-pulse"}`}
+            />
+            {isConnected
+              ? "Signaling Server Connected"
+              : "Signaling Server Offline"}
+          </span>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

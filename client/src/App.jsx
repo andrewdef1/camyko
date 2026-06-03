@@ -6,6 +6,7 @@ import Broadcaster from "./components/Broadcaster";
 import Viewer from "./components/Viewer";
 
 function App() {
+  const [isConnected, setIsConnected] = useState(socket.connected);
   const [rooms, setRooms] = useState(() => {
     const initial = {};
     for (let i = 1; i <= 10; i++) {
@@ -16,7 +17,12 @@ function App() {
 
   useEffect(() => {
     socket.on("connect", () => {
+      setIsConnected(true);
       console.log("Connected to signaling server");
+    });
+
+    socket.on("disconnect", () => {
+      setIsConnected(false);
     });
 
     socket.on("room-update", (updatedRooms) => {
@@ -25,6 +31,7 @@ function App() {
 
     return () => {
       socket.off("connect");
+      socket.off("disconnect");
       socket.off("room-update");
     };
   }, []);
@@ -32,7 +39,10 @@ function App() {
   return (
     <div className="min-h-screen font-sans">
       <Routes>
-        <Route path="/" element={<Dashboard rooms={rooms} />} />
+        <Route
+          path="/"
+          element={<Dashboard rooms={rooms} isConnected={isConnected} />}
+        />
         <Route path="/broadcast/:roomId" element={<Broadcaster />} />
         <Route path="/view/:roomId" element={<Viewer />} />
       </Routes>
