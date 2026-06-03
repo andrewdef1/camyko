@@ -1,8 +1,10 @@
 {
-  "name": "camyko-root",
-  "private": true,
+  "name": "camyko-server",
+  "version": "1.0.0",
+  "description": "Signaling server for Camyko",
+  "main": "server.js",
   "scripts": {
-    "start": "node server/server.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
