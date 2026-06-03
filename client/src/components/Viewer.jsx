@@ -27,9 +27,16 @@ const Viewer = () => {
         }
       };
 
+      pc.onconnectionstatechange = () => {
+        console.log("[Viewer] PC state:", pc.connectionState);
+      };
+
       pc.onicecandidate = (event) => {
         if (event.candidate && broadcasterId) {
-          console.log("Sending ICE candidate to broadcaster:", broadcasterId);
+          console.log(
+            "[Viewer] Sending ICE candidate to broadcaster:",
+            broadcasterId,
+          );
           socket.emit("ice-candidate", {
             to: broadcasterId,
             candidate: event.candidate,

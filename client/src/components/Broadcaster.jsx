@@ -59,6 +59,7 @@ const Broadcaster = () => {
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
+        console.log(`[Broadcaster] Sending ICE candidate to ${viewerId}`);
         socket.emit("ice-candidate", {
           to: viewerId,
           candidate: event.candidate,
@@ -66,8 +67,15 @@ const Broadcaster = () => {
       }
     };
 
+    pc.onconnectionstatechange = () => {
+      console.log(
+        `[Broadcaster] PC for ${viewerId} state: ${pc.connectionState}`,
+      );
+    };
+
     pc.onnegotiationneeded = async () => {
       try {
+        console.log(`[Broadcaster] Creating offer for ${viewerId}`);
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         socket.emit("webrtc-offer", { to: viewerId, offer });
