@@ -1,7 +1,7 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const cors = require('cors');
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const cors = require("cors");
 
 const app = express();
 app.use(cors());
@@ -9,9 +9,9 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+    origin: "*", // Allows connection from GitHub Pages or any other domain
+    methods: ["GET", "POST"],
+  },
 });
 
 // Initial room state for 10 rooms
@@ -19,58 +19,58 @@ const rooms = {};
 for (let i = 1; i <= 10; i++) {
   rooms[i.toString()] = {
     isLive: false,
-    broadcasterId: null
+    broadcasterId: null,
   };
 }
 
-io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+io.on("connection", (socket) => {
+  console.log("User connected:", socket.id);
 
   // Send current room states to the newly connected client
-  socket.emit('room-update', rooms);
+  socket.emit("room-update", rooms);
 
-  socket.on('join-room', ({ roomId, role }) => {
+  socket.on("join-room", ({ roomId, role }) => {
     socket.join(roomId);
     console.log(`User ${socket.id} joined room ${roomId} as ${role}`);
 
-    if (role === 'broadcaster') {
+    if (role === "broadcaster") {
       rooms[roomId].isLive = true;
       rooms[roomId].broadcasterId = socket.id;
-      io.emit('room-update', rooms);
+      io.emit("room-update", rooms);
     }
   });
 
-  socket.on('webrtc-offer', ({ roomId, offer }) => {
+  socket.on("webrtc-offer", ({ roomId, offer }) => {
     // Relay offer to others in the room (viewers)
-    socket.to(roomId).emit('webrtc-offer', { roomId, offer });
+    socket.to(roomId).emit("webrtc-offer", { roomId, offer });
   });
 
-  socket.on('webrtc-answer', ({ roomId, answer }) => {
+  socket.on("webrtc-answer", ({ roomId, answer }) => {
     // Relay answer back to the broadcaster
     const broadcasterId = rooms[roomId].broadcasterId;
     if (broadcasterId) {
-      io.to(broadcasterId).emit('webrtc-answer', { roomId, answer });
+      io.to(broadcasterId).emit("webrtc-answer", { roomId, answer });
     }
   });
 
-  socket.on('ice-candidate', ({ roomId, candidate }) => {
+  socket.on("ice-candidate", ({ roomId, candidate }) => {
     // Relay ICE candidate to others in the room
-    socket.to(roomId).emit('ice-candidate', { roomId, candidate });
+    socket.to(roomId).emit("ice-candidate", { roomId, candidate });
   });
 
-  socket.on('disconnecting', () => {
+  socket.on("disconnecting", () => {
     for (const roomId of socket.rooms) {
       if (rooms[roomId] && rooms[roomId].broadcasterId === socket.id) {
         rooms[roomId].isLive = false;
         rooms[roomId].broadcasterId = null;
-        io.emit('room-update', rooms);
+        io.emit("room-update", rooms);
         console.log(`Broadcaster disconnected from room ${roomId}`);
       }
     }
   });
 
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
   });
 });
 
