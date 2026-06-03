@@ -4,7 +4,7 @@ import io from "socket.io-client";
 const SOCKET_URL =
   window.location.hostname === "localhost"
     ? "http://localhost:3001"
-    : "camyko-production.up.railway.app"; // <--- PASTE HERE
+    : "https://camyko-production.up.railway.app";
 
 export const socket = io(SOCKET_URL);
 
