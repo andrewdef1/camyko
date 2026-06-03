@@ -15,6 +15,9 @@ const Broadcaster = () => {
   const stopEverything = () => {
     console.log("Cleanup: Stopping all media and connections");
 
+    // 0. Notify server
+    socket.emit("leave-room", { roomId });
+
     // 1. Stop all tracks in the stream
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => {
