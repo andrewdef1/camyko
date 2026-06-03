@@ -18,6 +18,7 @@ function App() {
   useEffect(() => {
     socket.on("connect", () => {
       setIsConnected(true);
+      socket.emit("get-rooms");
       console.log("Connected to signaling server");
     });
 
@@ -26,7 +27,7 @@ function App() {
     });
 
     socket.on("room-update", (updatedRooms) => {
-      setRooms(updatedRooms);
+      setRooms({ ...updatedRooms });
     });
 
     return () => {
