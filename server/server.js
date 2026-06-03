@@ -6,12 +6,17 @@ const cors = require("cors");
 const app = express();
 app.use(cors());
 
+app.get("/", (req, res) => {
+  res.send("Camyko Signaling Server is running!");
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*", // Allows connection from GitHub Pages or any other domain
+    origin: "*",
     methods: ["GET", "POST"],
   },
+  transports: ["websocket"],
 });
 
 // Initial room state for 10 rooms
