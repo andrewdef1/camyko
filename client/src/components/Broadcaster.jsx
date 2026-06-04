@@ -1,7 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { socket } from "../socket";
-import { ArrowLeft, Video, VideoOff, LogOut } from "lucide-react";
+import {
+  ArrowLeft,
+  Video,
+  VideoOff,
+  LogOut,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 
 const Broadcaster = () => {
   const { roomId } = useParams();
@@ -12,9 +19,24 @@ const Broadcaster = () => {
   const [streamActive, setStreamActive] = useState(false);
   const [facingMode, setFacingMode] = useState("user");
   const [error, setError] = useState(null);
+  const [zoom, setZoom] = useState(1);
+  const [zoomCapabilities, setZoomCapabilities] = useState(null);
 
   const toggleCamera = () => {
     setFacingMode((prev) => (prev === "user" ? "environment" : "user"));
+  };
+
+  const handleZoomChange = (e) => {
+    const value = parseFloat(e.target.value);
+    setZoom(value);
+    if (streamRef.current) {
+      const videoTrack = streamRef.current.getVideoTracks()[0];
+      if (videoTrack && videoTrack.applyConstraints) {
+        videoTrack
+          .applyConstraints({ advanced: [{ zoom: value }] })
+          .catch((err) => console.error("Error applying zoom:", err));
+      }
+    }
   };
 
   const stopMediaOnly = () => {
@@ -101,13 +123,28 @@ const Broadcaster = () => {
         stopMediaOnly();
 
         const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facingMode },
+          video: {
+            facingMode: facingMode,
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
           audio: true,
         });
 
         if (!isMounted) {
           mediaStream.getTracks().forEach((t) => t.stop());
           return;
+        }
+
+        const videoTrack = mediaStream.getVideoTracks()[0];
+        if (videoTrack && videoTrack.getCapabilities) {
+          const capabilities = videoTrack.getCapabilities();
+          if (capabilities.zoom) {
+            setZoomCapabilities(capabilities.zoom);
+            setZoom(capabilities.zoom.min);
+          } else {
+            setZoomCapabilities(null);
+          }
         }
 
         streamRef.current = mediaStream;
@@ -211,7 +248,7 @@ const Broadcaster = () => {
           </div>
         ) : (
           <>
-            <div className="w-full max-w-2xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-700">
+            <div className="w-full max-w-2xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-700 relative">
               <video
                 ref={localVideoRef}
                 autoPlay
@@ -219,7 +256,28 @@ const Broadcaster = () => {
                 muted
                 className={`w-full h-full object-cover ${facingMode === "user" ? "mirror" : ""}`}
               />
+
+              {/* Zoom Control Overlay */}
+              {zoomCapabilities && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 px-4 py-2 bg-slate-900/80 backdrop-blur-md rounded-full border border-slate-700 shadow-xl">
+                  <ZoomOut size={16} className="text-slate-400" />
+                  <input
+                    type="range"
+                    min={zoomCapabilities.min}
+                    max={zoomCapabilities.max}
+                    step={zoomCapabilities.step || 0.1}
+                    value={zoom}
+                    onChange={handleZoomChange}
+                    className="w-32 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                  />
+                  <ZoomIn size={16} className="text-slate-400" />
+                  <span className="text-[10px] font-mono text-emerald-400 w-8">
+                    {zoom.toFixed(1)}x
+                  </span>
+                </div>
+              )}
             </div>
+
             {streamActive && (
               <div className="w-full max-w-2xl flex justify-center">
                 <button
@@ -238,13 +296,25 @@ const Broadcaster = () => {
         )}
       </div>
 
-      <div className="pb-8 text-center text-slate-500 text-sm">
-        Stay on this page to keep the stream alive for OBS
+      <div className="pb-8 text-center text-slate-500 text-sm flex flex-col gap-1">
+        <div>Stay on this page to keep the stream alive for OBS</div>
+        <div className="text-[10px] uppercase tracking-widest opacity-50">
+          1080p HD Enabled
+        </div>
       </div>
 
       <style>{`
         .mirror {
           transform: scaleX(-1);
+        }
+        input[type='range']::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 12px;
+          height: 12px;
+          background: #10b981;
+          border-radius: 50%;
+          cursor: pointer;
         }
       `}</style>
     </div>
