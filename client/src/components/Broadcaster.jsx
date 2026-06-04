@@ -14,6 +14,7 @@ const Broadcaster = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const localVideoRef = useRef(null);
+  const canvasRef = useRef(document.createElement("canvas"));
   const peerConnections = useRef({});
   const streamRef = useRef(null);
   const [streamActive, setStreamActive] = useState(false);
@@ -40,6 +41,83 @@ const Broadcaster = () => {
       }
     }
   };
+
+  // Effect to handle Canvas Proxy for Digital Zoom (Firefox/Safari/etc)
+  // This ensures the zoom is actually encoded into the outgoing stream
+  useEffect(() => {
+    if (isHardwareZoomSupported || !streamActive) return;
+
+    const video = localVideoRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    let animationFrameId;
+
+    const render = () => {
+      if (video && video.readyState >= 2) {
+        // Match canvas size to video resolution
+        if (canvas.width !== video.videoWidth) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+
+        // Handle Mirroring (Digital zoom doesn't use the CSS mirror class)
+        if (facingMode === "user") {
+          ctx.translate(canvas.width, 0);
+          ctx.scale(-1, 1);
+        }
+
+        // Handle Digital Zoom
+        if (zoom > 1) {
+          const zoomedWidth = canvas.width / zoom;
+          const zoomedHeight = canvas.height / zoom;
+          const offsetX = (canvas.width - zoomedWidth) / 2;
+          const offsetY = (canvas.height - zoomedHeight) / 2;
+
+          ctx.drawImage(
+            video,
+            offsetX,
+            offsetY,
+            zoomedWidth,
+            zoomedHeight,
+            0,
+            0,
+            canvas.width,
+            canvas.height,
+          );
+        } else {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }
+
+        ctx.restore();
+      }
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    // Capture the canvas stream and replace tracks for all peers
+    // 30 FPS is enough for smooth stream
+    const canvasStream = canvas.captureStream(30);
+    const canvasVideoTrack = canvasStream.getVideoTracks()[0];
+
+    Object.values(peerConnections.current).forEach((pc) => {
+      const senders = pc.getSenders();
+      const videoSender = senders.find(
+        (s) => s.track && s.track.kind === "video",
+      );
+      if (videoSender) {
+        videoSender.replaceTrack(canvasVideoTrack);
+      }
+    });
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      if (canvasVideoTrack) canvasVideoTrack.stop();
+    };
+  }, [zoom, isHardwareZoomSupported, streamActive, facingMode]);
 
   const stopMediaOnly = () => {
     if (streamRef.current) {
@@ -82,7 +160,17 @@ const Broadcaster = () => {
 
     peerConnections.current[viewerId] = pc;
 
-    stream.getTracks().forEach((track) => {
+    // Use current active track (could be from canvas if digital zoom is on)
+    let tracksToUse = stream.getTracks();
+    if (!isHardwareZoomSupported && zoom > 1) {
+      const canvasStream = canvasRef.current.captureStream(30);
+      tracksToUse = [
+        canvasStream.getVideoTracks()[0],
+        ...stream.getAudioTracks(),
+      ];
+    }
+
+    tracksToUse.forEach((track) => {
       pc.addTrack(track, stream);
     });
 
@@ -177,19 +265,7 @@ const Broadcaster = () => {
           localVideoRef.current.srcObject = mediaStream;
         }
 
-        // Update tracks for all existing viewers
-        Object.values(peerConnections.current).forEach((pc) => {
-          const senders = pc.getSenders();
-          mediaStream.getTracks().forEach((track) => {
-            const sender = senders.find(
-              (s) => s.track && s.track.kind === track.kind,
-            );
-            if (sender) {
-              sender.replaceTrack(track);
-            }
-          });
-        });
-
+        // Initial connection using media stream
         socket.emit("join-room", { roomId, role: "broadcaster" });
 
         socket.on("viewer-joined", ({ viewerId }) => {
