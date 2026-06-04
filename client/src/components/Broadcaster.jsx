@@ -137,15 +137,31 @@ const Broadcaster = () => {
         }
 
         const videoTrack = mediaStream.getVideoTracks()[0];
-        if (videoTrack && videoTrack.getCapabilities) {
-          const capabilities = videoTrack.getCapabilities();
-          if (capabilities.zoom) {
-            setZoomCapabilities(capabilities.zoom);
-            setZoom(capabilities.zoom.min);
+
+        // Some browsers/devices need a moment for the track to fully initialize
+        // before capabilities are reported correctly.
+        setTimeout(() => {
+          if (videoTrack && videoTrack.getCapabilities) {
+            try {
+              const capabilities = videoTrack.getCapabilities();
+              console.log("Camera capabilities:", capabilities);
+              if (capabilities.zoom) {
+                setZoomCapabilities(capabilities.zoom);
+                setZoom(capabilities.zoom.min || 1);
+              } else {
+                console.warn("Zoom not supported by this camera/browser");
+                setZoomCapabilities(null);
+              }
+            } catch (e) {
+              console.error("Error getting capabilities:", e);
+              setZoomCapabilities(null);
+            }
           } else {
-            setZoomCapabilities(null);
+            console.warn(
+              "getCapabilities not supported on this device/browser",
+            );
           }
-        }
+        }, 500);
 
         streamRef.current = mediaStream;
         setStreamActive(true);
