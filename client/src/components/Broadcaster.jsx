@@ -21,6 +21,7 @@ const Broadcaster = () => {
   const [error, setError] = useState(null);
   const [zoom, setZoom] = useState(1);
   const [zoomCapabilities, setZoomCapabilities] = useState(null);
+  const [isHardwareZoomSupported, setIsHardwareZoomSupported] = useState(false);
 
   const toggleCamera = () => {
     setFacingMode((prev) => (prev === "user" ? "environment" : "user"));
@@ -29,12 +30,13 @@ const Broadcaster = () => {
   const handleZoomChange = (e) => {
     const value = parseFloat(e.target.value);
     setZoom(value);
-    if (streamRef.current) {
+
+    if (isHardwareZoomSupported && streamRef.current) {
       const videoTrack = streamRef.current.getVideoTracks()[0];
       if (videoTrack && videoTrack.applyConstraints) {
         videoTrack
           .applyConstraints({ advanced: [{ zoom: value }] })
-          .catch((err) => console.error("Error applying zoom:", err));
+          .catch((err) => console.error("Error applying hardware zoom:", err));
       }
     }
   };
@@ -148,18 +150,23 @@ const Broadcaster = () => {
               if (capabilities.zoom) {
                 setZoomCapabilities(capabilities.zoom);
                 setZoom(capabilities.zoom.min || 1);
+                setIsHardwareZoomSupported(true);
               } else {
-                console.warn("Zoom not supported by this camera/browser");
-                setZoomCapabilities(null);
+                console.warn(
+                  "Hardware zoom not supported by this camera/browser. Using CSS fallback.",
+                );
+                setZoomCapabilities({ min: 1, max: 3, step: 0.1 });
+                setIsHardwareZoomSupported(false);
               }
             } catch (e) {
               console.error("Error getting capabilities:", e);
-              setZoomCapabilities(null);
+              setZoomCapabilities({ min: 1, max: 3, step: 0.1 });
+              setIsHardwareZoomSupported(false);
             }
           } else {
-            console.warn(
-              "getCapabilities not supported on this device/browser",
-            );
+            console.warn("getCapabilities not supported. Using CSS fallback.");
+            setZoomCapabilities({ min: 1, max: 3, step: 0.1 });
+            setIsHardwareZoomSupported(false);
           }
         }, 500);
 
@@ -270,12 +277,21 @@ const Broadcaster = () => {
                 autoPlay
                 playsInline
                 muted
-                className={`w-full h-full object-cover ${facingMode === "user" ? "mirror" : ""}`}
+                className="w-full h-full object-cover"
+                style={{
+                  transform: `
+                    ${facingMode === "user" ? "scaleX(-1)" : "scaleX(1)"}
+                    ${!isHardwareZoomSupported ? `scale(${zoom})` : ""}
+                  `,
+                  transition: isHardwareZoomSupported
+                    ? "none"
+                    : "transform 0.1s ease-out",
+                }}
               />
 
               {/* Zoom Control Overlay */}
               {zoomCapabilities && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 px-4 py-2 bg-slate-900/80 backdrop-blur-md rounded-full border border-slate-700 shadow-xl">
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 px-4 py-2 bg-slate-900/80 backdrop-blur-md rounded-full border border-slate-700 shadow-xl z-10">
                   <ZoomOut size={16} className="text-slate-400" />
                   <input
                     type="range"
@@ -290,6 +306,11 @@ const Broadcaster = () => {
                   <span className="text-[10px] font-mono text-emerald-400 w-8">
                     {zoom.toFixed(1)}x
                   </span>
+                  {!isHardwareZoomSupported && (
+                    <span className="text-[8px] text-slate-500 font-bold ml-1 border border-slate-700 px-1 rounded uppercase">
+                      Digital
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -320,9 +341,6 @@ const Broadcaster = () => {
       </div>
 
       <style>{`
-        .mirror {
-          transform: scaleX(-1);
-        }
         input[type='range']::-webkit-slider-thumb {
           -webkit-appearance: none;
           appearance: none;
